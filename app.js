@@ -1,6 +1,6 @@
 /* Enlarger app. Keep APP_VERSION equal to VERSION in sw.js and "version" in version.json. */
 'use strict';
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.3';
 
 // AI libraries, loaded only when an AI mode is used. Each entry lists fallbacks tried in order.
 const LIBS = {
@@ -31,7 +31,7 @@ const CANVAS_MAX = 16777216; // iPhone/iPad Safari canvas limit in pixels
 const JOB_KEY = 'enlarger.job';
 
 /* ---------------- settings ---------------- */
-const DEFAULTS = { autoCheck: true, defSize: 'p:20x30', defCap: '10', theme: 'system', tile: '512', bigModel: false, webgpu: false, wake: true, lastCheck: 0 };
+const DEFAULTS = { autoCheck: true, defSize: 'p:20x30', defCap: '10', theme: 'system', tile: (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? '384' : '512'), bigModel: false, webgpu: false, wake: true, lastCheck: 0 };
 let settings = { ...DEFAULTS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('enlarger.settings') || '{}')); } catch (e) {}
 function saveSettings() { try { localStorage.setItem('enlarger.settings', JSON.stringify(settings)); } catch (e) {} }
@@ -286,6 +286,12 @@ async function ensureTf() {
   if (tfReady) return tfReady;
   tfReady = (async () => {
     await loadFirst(LIBS.tf);
+    // Keep GPU memory bounded: textures freed past this budget are deleted
+    // instead of pooled. Without it the pool grew to many GB and phones closed the app.
+    try {
+      tf.env().set('WEBGL_DELETE_TEXTURE_THRESHOLD', (IS_PHONE ? 96 : 512) * 1048576);
+      if (IS_PHONE) tf.env().set('WEBGL_FORCE_F16_TEXTURES', true);
+    } catch (e) {}
     let backend = 'webgl';
     if (settings.webgpu && navigator.gpu) {
       try { await loadFirst(LIBS.webgpu); if (await tf.setBackend('webgpu')) backend = 'webgpu'; } catch (e) { backend = 'webgl'; }
@@ -429,10 +435,13 @@ async function run() {
 
   const f = engine ? engine.factor : 1;
   const sx = W / crop.w, sy = H / crop.h;
-  const T = +settings.tile || 512;
+  // AI pieces always use the same input size (P × P) so the GPU can reuse its memory.
+  const P = engine ? ({ 256: 64, 384: 96, 512: 128 }[settings.tile] || 96) : 0;
+  let T = +settings.tile || 512;
   const sharpen = (S.sharpen / 100) * 1.4 + (engine ? 0 : 0);
   const om = sharpen > 0 ? 2 : 0;
   const pad = engine ? 8 : 3;
+  if (engine) T = Math.max(32, Math.min(T, Math.floor((P - 2 * pad - 4) * Math.min(sx, sy))));
   const p = Math.min(1, 1400 / Math.max(W, H));
   const prev = getCanvas('preview', Math.max(1, Math.round(W * p)), Math.max(1, Math.round(H * p)));
   const pctx = ctxOf(prev); pctx.imageSmoothingEnabled = true; pctx.imageSmoothingQuality = 'high';
@@ -448,13 +457,19 @@ async function run() {
         const ex1 = Math.min(W, ox + tw + om), ey1 = Math.min(H, oy + th + om);
         const ew = ex1 - ex0, eh = ey1 - ey0;
         const fx0 = crop.x + ex0 / sx, fx1 = crop.x + ex1 / sx, fy0 = crop.y + ey0 / sy, fy1 = crop.y + ey1 / sy;
-        const ix0 = Math.max(0, Math.floor(fx0) - pad), iy0 = Math.max(0, Math.floor(fy0) - pad);
-        const ix1 = Math.min(S.srcW, Math.ceil(fx1) + pad), iy1 = Math.min(S.srcH, Math.ceil(fy1) + pad);
-        const pw = ix1 - ix0, ph = iy1 - iy0;
+        let ix0 = Math.max(0, Math.floor(fx0) - pad), iy0 = Math.max(0, Math.floor(fy0) - pad);
+        let ix1 = Math.min(S.srcW, Math.ceil(fx1) + pad), iy1 = Math.min(S.srcH, Math.ceil(fy1) + pad);
+        let pw = ix1 - ix0, ph = iy1 - iy0;
+        if (engine) {
+          // widen the source window to exactly P × P, shifting it inside the photo when near an edge
+          ix0 = Math.max(0, Math.min(ix0, S.srcW - P)); iy0 = Math.max(0, Math.min(iy0, S.srcH - P));
+          pw = P; ph = P;
+        }
         let src;
         const patch = getCanvas('patch', pw, ph);
         const pc = ctxOf(patch); pc.clearRect(0, 0, pw, ph);
-        pc.drawImage(S.bmp, ix0, iy0, pw, ph, 0, 0, pw, ph);
+        const dw = Math.min(pw, S.srcW - ix0), dh = Math.min(ph, S.srcH - iy0);
+        pc.drawImage(S.bmp, ix0, iy0, dw, dh, 0, 0, dw, dh);
         src = engine ? await engine.run(patch) : patch;
         const tile = getCanvas('tile', ew, eh);
         const tc = ctxOf(tile, true);

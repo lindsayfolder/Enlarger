@@ -1,11 +1,9 @@
 {
-  "version": "1.0.2",
+  "version": "1.0.3",
   "date": "2026-11-02",
   "notes": [
-    "On iPhone and Android, a new \"Save to Photos\" button puts your enlargement straight into Photos.",
-    "\"Save to Files\" now tells you where the file went (Files app \u2192 Downloads).",
-    "If a file can't be made, you now see a clear message instead of nothing.",
-    "Large prints (like 20 \u00d7 30 at 300 ppi) use less memory on phones.",
-    "Clearer warnings before very large jobs, with the reason if one stops."
+    "Fixes AI enlarging closing the app on iPhone: GPU memory now stays small instead of growing with every piece.",
+    "AI pieces are a fixed size, which is steadier and faster on phones.",
+    "On iPhone and Android, a \"Save to Photos\" button puts your enlargement straight into Photos."
   ]
 }

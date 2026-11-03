@@ -1,7 +1,7 @@
 /* Enlarger service worker.
    To publish an update: change VERSION here, in app.js (APP_VERSION) and in version.json,
    then upload the files. Installed apps find it under Settings > App updates. */
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const SHELL = 'enlarger-shell-' + VERSION;
 const RUNTIME = 'enlarger-runtime-v1';
 const SHELL_FILES = [

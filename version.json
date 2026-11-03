@@ -1,10 +1,11 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.2",
   "date": "2026-11-02",
   "notes": [
+    "On iPhone and Android, a new \"Save to Photos\" button puts your enlargement straight into Photos.",
+    "\"Save to Files\" now tells you where the file went (Files app \u2192 Downloads).",
+    "If a file can't be made, you now see a clear message instead of nothing.",
     "Large prints (like 20 \u00d7 30 at 300 ppi) use less memory on phones.",
-    "Clearer warnings before very large jobs, with the reason if one stops.",
-    "If the phone closes the app mid-job, Enlarger tells you why when you reopen it.",
-    "Faster fitting under the file size limit."
+    "Clearer warnings before very large jobs, with the reason if one stops."
   ]
 }

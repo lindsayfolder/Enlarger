@@ -1,6 +1,6 @@
 /* Enlarger app. Keep APP_VERSION equal to VERSION in sw.js and "version" in version.json. */
 'use strict';
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 
 // AI libraries, loaded only when an AI mode is used. Each entry lists fallbacks tried in order.
 const LIBS = {
@@ -565,7 +565,18 @@ function clearResult() {
   $('resultStep').hidden = true;
 }
 function showResult() {
-  const r = S.result; if (!r || !S.blob) return;
+  const r = S.result; if (!r) return;
+  if (!S.blob) {
+    $('resultStep').hidden = false;
+    $('resReadout').innerHTML = '';
+    const rv = $('resVerdict'); rv.hidden = false; rv.className = 'verdict v-bad';
+    $('resPill').textContent = 'Not saved';
+    $('resText').textContent = 'The picture was enlarged but the file could not be made. Tap Remake file, or choose 200 ppi and try again.';
+    $('saveBtn').hidden = true; $('shareBtn').hidden = true;
+    $('resultStep').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  $('saveBtn').hidden = false;
   $('resultStep').hidden = false;
   const name = fileName();
   $('resAside').textContent = r.secs < 1 ? 'under 1 s' : r.secs < 90 ? `${Math.round(r.secs)} s` : `${Math.round(r.secs / 60)} min`;
@@ -585,7 +596,15 @@ function showResult() {
     rv.className = 'verdict v-ok'; $('resPill').textContent = 'Ready';
     $('resText').textContent = (S.cap > 0 ? `Fits under ${S.cap} MB. ` : '') + `Saves as ${name}.`;
   }
-  $('shareBtn').hidden = !(navigator.canShare && navigator.canShare({ files: [new File([S.blob], name, { type: S.blob.type })] }));
+  const canShare = !!(navigator.canShare && navigator.canShare({ files: [new File([S.blob], name, { type: S.blob.type })] }));
+  $('shareBtn').hidden = !canShare;
+  // On phones, sharing is how a picture reaches the Photos app, so make it the main button.
+  const photosFirst = canShare && IS_PHONE;
+  $('shareBtn').className = photosFirst ? 'btn primary' : 'btn';
+  $('saveBtn').className = photosFirst ? 'btn' : 'btn primary';
+  $('shareLabel').textContent = photosFirst ? 'Save to Photos' : 'Share';
+  $('saveLabel').textContent = IS_PHONE ? 'Save to Files' : 'Save';
+  if (photosFirst) $('shareBtn').after($('saveBtn'));
   $('cmpTagR').textContent = r.ai ? 'Enlarger AI' : 'Enlarger';
   S.loupe = { x: r.W / 2, y: r.H / 2 };
   drawResultPreview(); drawCompare();
@@ -636,11 +655,11 @@ $('saveBtn').addEventListener('click', () => {
   a.href = URL.createObjectURL(S.blob); a.download = fileName();
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-  toast('Saved ' + fileName());
+  toast(IS_PHONE ? `Saved to the Files app, in Downloads: ${fileName()}` : 'Saved ' + fileName(), 6000);
 });
 $('shareBtn').addEventListener('click', async () => {
   if (!S.blob) return;
-  try { await navigator.share({ files: [new File([S.blob], fileName(), { type: S.blob.type })], title: fileName() }); }
+  try { await navigator.share({ files: [new File([S.blob], fileName(), { type: S.blob.type })] }); if (IS_PHONE) toast('Choose "Save Image" to put it in Photos.', 5000); }
   catch (e) { if (e.name !== 'AbortError') toast("Sharing didn't work here. Use Save instead."); }
 });
 $('resaveBtn').addEventListener('click', async () => {

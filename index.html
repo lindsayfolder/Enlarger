@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Enlarger</title>
+<meta name="description" content="Enlarge photos for big prints. AI upscaling that runs on your device.">
+<meta name="theme-color" content="#1d4f8f" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d1218" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Enlarger">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one working column, numbered steps in the order a print is made, run bar pinned to the bottom. */
+:root{
+  --paper:#f2f4f6; --sheet:#ffffff; --ink:#111922; --muted:#566373; --line:#d6dce3; --tint:#e6edf6;
+  --accent:#1d4f8f; --accent-ink:#ffffff; --accent-soft:#dbe6f4;
+  --ok:#24734a; --ok-soft:#dcefe3; --warn:#93580a; --warn-soft:#f6ead6; --bad:#a83232; --bad-soft:#f6dede;
+  --shade:rgba(12,18,26,.55);
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r:10px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0d1218; --sheet:#151c25; --ink:#e6ecf2; --muted:#93a0b0; --line:#283342; --tint:#1b2430;
+    --accent:#76aaf0; --accent-ink:#0a1322; --accent-soft:#1d2d44;
+    --ok:#62c28b; --ok-soft:#173025; --warn:#e2a74c; --warn-soft:#352812; --bad:#f08080; --bad-soft:#3a1c1c;
+    --shade:rgba(0,0,0,.6);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0d1218; --sheet:#151c25; --ink:#e6ecf2; --muted:#93a0b0; --line:#283342; --tint:#1b2430;
+  --accent:#76aaf0; --accent-ink:#0a1322; --accent-soft:#1d2d44;
+  --ok:#62c28b; --ok-soft:#173025; --warn:#e2a74c; --warn-soft:#352812; --bad:#f08080; --bad-soft:#3a1c1c;
+  --shade:rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--f-body);
+  padding-top:env(safe-area-inset-top,0px)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--sheet);z-index:30}
+[hidden]{display:none!important}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--sheet);border-bottom:1px solid var(--line)}
+.top-in{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:12px;padding-block:10px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.brand{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.mark{width:28px;height:28px;flex:none}
+.brand h1{margin:0;font:800 21px/1 var(--f-display);letter-spacing:-.01em}
+.brand small{display:block;font:500 11px/1.2 var(--f-mono);color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.icon-btn{display:grid;place-items:center;width:40px;height:40px;border-radius:999px;border:1px solid var(--line);background:transparent;cursor:pointer}
+.icon-btn svg{width:20px;height:20px}
+.dot{position:relative}
+.dot::after{content:"";position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--sheet)}
+
+/* page */
+main{max-width:760px;margin:0 auto;display:grid;gap:14px;padding-block:16px 140px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.banner{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--r);padding:12px 14px}
+.banner p{margin:0;flex:1;min-width:180px}
+.step{background:var(--sheet);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:12px;min-width:0}
+.step-h{display:flex;align-items:baseline;gap:10px}
+.step-h .n{font:500 12px/1 var(--f-mono);color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:4px 7px}
+.step-h h2{margin:0;font:600 18px/1.2 var(--f-display);text-wrap:balance}
+.step-h .aside{margin-left:auto;font:400 12px/1.3 var(--f-mono);color:var(--muted);text-align:right}
+.hint{margin:0;color:var(--muted);font-size:13.5px;max-width:62ch}
+.lab{font:500 12px/1.2 var(--f-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.field{display:grid;gap:6px;min-width:0}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.row>.field{flex:1 1 210px}
+select,input[type=number]{width:100%;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:8px 10px}
+input[type=range]{width:100%;accent-color:var(--accent);min-height:32px}
+
+/* segmented */
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;padding:3px;background:var(--paper);gap:3px;flex-wrap:wrap}
+.seg button{flex:1 1 0;min-width:72px;min-height:42px;border:0;border-radius:7px;background:transparent;cursor:pointer;padding:6px 8px;line-height:1.2}
+.seg button small{display:block;font:400 11px/1.2 var(--f-mono);color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--sheet);box-shadow:0 0 0 1px var(--accent) inset;font-weight:600}
+.seg button[aria-pressed="true"] small{color:var(--accent)}
+
+/* drop */
+.drop{display:grid;place-items:center;text-align:center;gap:8px;border:1.5px dashed var(--line);border-radius:var(--r);padding:26px 14px;cursor:pointer;background:var(--paper)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop b{font:600 16px/1.3 var(--f-display)}
+.file-line{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.thumb{width:64px;height:64px;border-radius:8px;object-fit:cover;background:var(--tint);border:1px solid var(--line)}
+.file-meta{flex:1;min-width:0}
+.file-meta b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-meta span{color:var(--muted);font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--sheet);cursor:pointer;font-weight:600;text-decoration:none;color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn svg{width:18px;height:18px}
+
+/* readout */
+.readout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.readout div{background:var(--paper);padding:10px 12px;display:grid;gap:2px}
+.readout dt{font:500 11px/1.2 var(--f-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.readout div:last-child:nth-child(odd){grid-column:1/-1}
+.readout dd{margin:0;font:500 14px/1.35 var(--f-mono);font-variant-numeric:tabular-nums}
+.verdict{display:flex;gap:10px;align-items:flex-start;border-radius:8px;padding:10px 12px;font-size:14px}
+.verdict .pill{flex:none;font:600 11px/1 var(--f-mono);letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:5px 8px;margin-top:1px}
+.v-ok{background:var(--ok-soft)} .v-ok .pill{background:var(--ok);color:var(--sheet)}
+.v-warn{background:var(--warn-soft)} .v-warn .pill{background:var(--warn);color:var(--sheet)}
+.v-bad{background:var(--bad-soft)} .v-bad .pill{background:var(--bad);color:var(--sheet)}
+
+/* crop */
+.crop-wrap{position:relative;border-radius:8px;overflow:hidden;background:var(--tint);touch-action:none;user-select:none;-webkit-user-select:none}
+.crop-wrap canvas{display:block;width:100%;height:auto;cursor:grab}
+.crop-wrap canvas:active{cursor:grabbing}
+.crop-note{position:absolute;left:8px;bottom:8px;font:500 11px/1 var(--f-mono);background:var(--shade);color:#fff;padding:5px 7px;border-radius:5px}
+
+/* run bar */
+.runbar{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--sheet);border-top:1px solid var(--line);
+  padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+.runbar-in{max-width:760px;margin:0 auto;display:grid;gap:8px;padding-top:12px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.runbar .btn.primary{width:100%;min-height:52px;font-size:16px}
+.bar{height:8px;border-radius:999px;background:var(--tint);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.prog-line{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:13px}
+.prog-line span{color:var(--muted)}
+
+/* result */
+.result-img{position:relative;border-radius:8px;overflow:hidden;background:var(--tint)}
+.result-img canvas{display:block;width:100%;height:auto;cursor:crosshair}
+.loupe-box{position:absolute;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none}
+.compare{position:relative;border-radius:8px;overflow:hidden;background:var(--tint);aspect-ratio:1/1;max-width:100%}
+.compare canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:auto}
+.compare .after{clip-path:inset(0 0 0 50%)}
+.compare .handle{position:absolute;top:0;bottom:0;left:50%;width:2px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);pointer-events:none}
+.compare .tag{position:absolute;top:8px;font:500 11px/1 var(--f-mono);background:var(--shade);color:#fff;padding:5px 7px;border-radius:5px}
+.compare .tag.l{left:8px} .compare .tag.r{right:8px}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.actions .btn{flex:1 1 140px}
+
+/* settings */
+dialog{border:0;padding:0;background:var(--sheet);color:var(--ink);width:min(560px,100vw);max-height:100dvh;border-radius:14px}
+dialog::backdrop{background:var(--shade)}
+@media (max-width:600px){dialog{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0}}
+.sheet{display:flex;flex-direction:column;height:100%;max-height:inherit}
+.sheet-h{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);
+  padding-block:calc(12px + env(safe-area-inset-top,0px)) 12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.sheet-h h2{margin:0;flex:1;font:700 20px/1.2 var(--f-display)}
+.sheet-b{overflow:auto;display:grid;gap:18px;padding-block:16px calc(24px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.group{display:grid;gap:10px}
+.group h3{margin:0;font:500 12px/1.2 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;gap:10px;background:var(--paper)}
+.kv{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.kv span{color:var(--muted)}
+.toggle{display:flex;align-items:center;gap:12px;justify-content:space-between;min-height:40px}
+.toggle span{flex:1}
+.toggle span small{display:block;color:var(--muted);font-size:12.5px}
+.toggle input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.notes{margin:0;padding-left:18px;color:var(--ink);font-size:14px}
+.status{font-size:13.5px;color:var(--muted)}
+.status.good{color:var(--ok)} .status.attn{color:var(--accent)} .status.err{color:var(--bad)}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--ink);color:var(--paper);padding:10px 14px;border-radius:10px;max-width:min(92vw,520px);font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="7" fill="var(--accent)"/>
+        <path d="M8 13V8h5M19 8h5v5M24 19v5h-5M13 24H8v-5" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round"/>
+        <rect x="12.5" y="12.5" width="7" height="7" rx="1" fill="var(--accent-ink)"/>
+      </svg>
+      <div><h1>Enlarger</h1><small>Photo to print size</small></div>
+    </div>
+    <button class="icon-btn" id="openSettings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="main">
+  <div class="banner" id="updateBanner" hidden>
+    <p><b>Update ready.</b> <span id="bannerText">A new version of Enlarger is available.</span></p>
+    <button class="btn primary" id="bannerInstall">Update now</button>
+  </div>
+
+  <!-- 1. Photo -->
+  <section class="step" aria-labelledby="h1">
+    <div class="step-h"><span class="n">1</span><h2 id="h1">Photo</h2><span class="aside" id="srcAside"></span></div>
+    <label class="drop" id="drop" for="fileInput">
+      <b>Choose a photo</b>
+      <span class="hint">JPEG, PNG, WebP or HEIC. It stays on this device.</span>
+      <input type="file" id="fileInput" accept="image/*" hidden>
+    </label>
+    <button class="btn ghost" id="sampleBtn" style="justify-self:start">Try it with a sample photo</button>
+    <div class="file-line" id="fileLine" hidden>
+      <img class="thumb" id="thumb" alt="">
+      <div class="file-meta"><b id="fileName"></b><span id="fileInfo" class="num"></span></div>
+      <button class="btn ghost" id="replace">Replace</button>
+    </div>
+  </section>
+
+  <!-- 2. Print size -->
+  <section class="step" aria-labelledby="h2">
+    <div class="step-h"><span class="n">2</span><h2 id="h2">Print size</h2></div>
+    <div class="row">
+      <div class="field">
+        <label class="lab" for="size">Size</label>
+        <select id="size">
+          <optgroup label="Prints (inches)">
+            <option value="p:4x6">4 × 6</option>
+            <option value="p:5x7">5 × 7</option>
+            <option value="p:8x10">8 × 10</option>
+            <option value="p:8.5x11">8.5 × 11 (letter)</option>
+            <option value="p:11x14">11 × 14</option>
+            <option value="p:12x18">12 × 18</option>
+            <option value="p:16x20">16 × 20</option>
+            <option value="p:18x24">18 × 24</option>
+            <option value="p:20x30" selected>20 × 30</option>
+            <option value="p:24x36">24 × 36</option>
+          </optgroup>
+          <optgroup label="Keep the photo's shape">
+            <option value="s:2">2× bigger</option>
+            <option value="s:3">3× bigger</option>
+            <option value="s:4">4× bigger</option>
+            <option value="s:6">6× bigger</option>
+          </optgroup>
+          <optgroup label="Custom">
+            <option value="ci">Custom inches</option>
+            <option value="cp">Exact pixels</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="field" id="orientField">
+        <span class="lab">Orientation</span>
+        <div class="seg" id="orient" role="group" aria-label="Orientation">
+          <button data-v="auto" aria-pressed="true">Auto</button>
+          <button data-v="portrait" aria-pressed="false">Tall</button>
+          <button data-v="landscape" aria-pressed="false">Wide</button>
+        </div>
+      </div>
+    </div>
+    <div class="row" id="customInches" hidden>
+      <div class="field"><label class="lab" for="ciW">Width (in)</label><input type="number" id="ciW" min="1" max="120" step="0.5" value="20" inputmode="decimal"></div>
+      <div class="field"><label class="lab" for="ciH">Height (in)</label><input type="number" id="ciH" min="1" max="120" step="0.5" value="30" inputmode="decimal"></div>
+    </div>
+    <div class="row" id="customPixels" hidden>
+      <div class="field"><label class="lab" for="cpW">Width (px)</label><input type="number" id="cpW" min="16" max="20000" step="1" value="4000" inputmode="numeric"></div>
+      <div class="field"><label class="lab" for="cpH">Height (px)</label><input type="number" id="cpH" min="16" max="20000" step="1" value="6000" inputmode="numeric"></div>
+    </div>
+    <div class="field">
+      <span class="lab">Print resolution</span>
+      <div class="seg" id="dpi" role="group" aria-label="Print resolution">
+        <button data-v="150" aria-pressed="false">150 ppi<small>viewed from afar</small></button>
+        <button data-v="200" aria-pressed="true">200 ppi<small>posters</small></button>
+        <button data-v="300" aria-pressed="false">300 ppi<small>close-up</small></button>
+      </div>
+    </div>
+    <dl class="readout" id="readout">
+      <div><dt>Output</dt><dd id="roPx">4000 × 6000 px</dd></div>
+      <div><dt>Print</dt><dd id="roMp">20 × 30 in</dd></div>
+      <div><dt>Enlargement</dt><dd id="roScale">—</dd></div>
+      <div><dt>Original at this size</dt><dd id="roPpi">—</dd></div>
+    </dl>
+    <div class="verdict v-ok" id="verdict" hidden><span class="pill" id="vPill">Good</span><span id="vText"></span></div>
+  </section>
+
+  <!-- 3. Crop -->
+  <section class="step" aria-labelledby="h3" id="cropStep" hidden>
+    <div class="step-h"><span class="n">3</span><h2 id="h3">Framing</h2><span class="aside" id="cropAside"></span></div>
+    <p class="hint" id="cropHint">Drag to choose what stays in the print. The photo's shape differs a little from the paper, so the edges outside the frame get trimmed.</p>
+    <div class="crop-wrap" id="cropWrap"><canvas id="cropCanvas" aria-label="Drag to move the print frame"></canvas><span class="crop-note num" id="cropNote"></span></div>
+    <div class="field">
+      <label class="lab" for="zoom">Zoom in</label>
+      <input type="range" id="zoom" min="40" max="100" value="100" step="1">
+    </div>
+  </section>
+
+  <!-- 4. Enhance -->
+  <section class="step" aria-labelledby="h4">
+    <div class="step-h"><span class="n" id="n4">4</span><h2 id="h4">Detail</h2></div>
+    <div class="seg" id="mode" role="group" aria-label="Enlarging method">
+      <button data-v="quality" aria-pressed="true">AI best<small>sharpest</small></button>
+      <button data-v="fast" aria-pressed="false">AI fast<small>quicker</small></button>
+      <button data-v="classic" aria-pressed="false">Classic<small>no AI</small></button>
+    </div>
+    <p class="hint" id="modeHint">The AI model rebuilds fine detail and runs on this phone. The first run downloads it once, then it works offline.</p>
+    <div class="field">
+      <label class="lab" for="sharpen">Extra sharpening <span class="num" id="sharpenVal">0</span></label>
+      <input type="range" id="sharpen" min="0" max="100" value="0" step="5">
+    </div>
+  </section>
+
+  <!-- 5. Save -->
+  <section class="step" aria-labelledby="h5">
+    <div class="step-h"><span class="n" id="n5">5</span><h2 id="h5">File</h2></div>
+    <div class="row">
+      <div class="field">
+        <span class="lab">Format</span>
+        <div class="seg" id="format" role="group" aria-label="File format">
+          <button data-v="jpeg" aria-pressed="true">JPEG<small>for printing</small></button>
+          <button data-v="png" aria-pressed="false">PNG<small>very large</small></button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="lab" for="cap">Keep the file under</label>
+        <select id="cap">
+          <option value="10">10 MB (Amazon, most sites)</option>
+          <option value="20">20 MB (email)</option>
+          <option value="25">25 MB (Gmail)</option>
+          <option value="0">No limit</option>
+        </select>
+      </div>
+    </div>
+    <div class="field" id="qualityField">
+      <label class="lab" for="quality">Best quality allowed <span class="num" id="qualityVal">92</span></label>
+      <input type="range" id="quality" min="70" max="100" value="92" step="1">
+    </div>
+    <p class="hint">The print size and ppi are written into the file, so print shops read it as the right size. Changed these after enlarging? Tap Remake file under your result.</p>
+  </section>
+
+  <!-- Result -->
+  <section class="step" aria-labelledby="hr" id="resultStep" hidden>
+    <div class="step-h"><h2 id="hr">Your enlargement</h2><span class="aside num" id="resAside"></span></div>
+    <div class="result-img" id="resultBox"><canvas id="resultCanvas" aria-label="Tap to inspect a spot at full size"></canvas><div class="loupe-box" id="loupeBox"></div></div>
+    <p class="hint">Tap the picture to inspect any spot at full size. Slide to compare.</p>
+    <div class="compare" id="compare">
+      <canvas id="cmpBefore"></canvas>
+      <canvas id="cmpAfter" class="after"></canvas>
+      <span class="handle" id="cmpHandle"></span>
+      <span class="tag l">Plain resize</span><span class="tag r" id="cmpTagR">Enlarger</span>
+    </div>
+    <input type="range" id="cmpSlider" min="0" max="100" value="50" aria-label="Compare before and after">
+    <dl class="readout" id="resReadout"></dl>
+    <div class="verdict" id="resVerdict" hidden><span class="pill" id="resPill"></span><span id="resText"></span></div>
+    <div class="actions">
+      <button class="btn primary" id="saveBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>Save</button>
+      <button class="btn" id="shareBtn" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m0 0L7 8m5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>Share</button>
+      <button class="btn ghost" id="resaveBtn">Remake file</button>
+    </div>
+  </section>
+</main>
+
+<div class="runbar">
+  <div class="runbar-in">
+    <div id="progress" hidden>
+      <div class="prog-line"><b id="progStage">Enlarging</b><span class="num" id="progEta"></span></div>
+      <div class="bar" style="margin-top:6px"><i id="progBar"></i></div>
+    </div>
+    <div class="row" style="gap:10px;flex-wrap:nowrap">
+      <button class="btn primary" id="runBtn" disabled>Choose a photo to start</button>
+      <button class="btn" id="cancelBtn" hidden>Cancel</button>
+    </div>
+  </div>
+</div>
+
+<dialog id="settings" aria-labelledby="setTitle">
+  <div class="sheet">
+    <div class="sheet-h">
+      <h2 id="setTitle">Settings</h2>
+      <button class="icon-btn" id="closeSettings" aria-label="Close settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="sheet-b">
+      <div class="group">
+        <h3>App updates</h3>
+        <div class="card">
+          <div class="kv"><span>Installed version</span><b class="num" id="curVer"></b></div>
+          <div class="kv"><span>Latest version</span><b class="num" id="latestVer">—</b></div>
+          <p class="status" id="updStatus">Not checked yet.</p>
+          <div id="updNotesWrap" hidden><b>What's new</b><ul class="notes" id="updNotes"></ul></div>
+          <div class="actions">
+            <button class="btn" id="checkUpd">Check for updates</button>
+            <button class="btn primary" id="installUpd" hidden>Install update</button>
+          </div>
+          <label class="toggle"><span>Check automatically<small>Looks for a new version each time the app opens.</small></span><input type="checkbox" id="autoCheck" checked></label>
+        </div>
+      </div>
+      <div class="group">
+        <h3>Defaults</h3>
+        <div class="card">
+          <div class="field"><label class="lab" for="defSize">Starting print size</label><select id="defSize"></select></div>
+          <div class="field"><label class="lab" for="defCap">Starting file limit</label><select id="defCap">
+            <option value="10">10 MB</option><option value="20">20 MB</option><option value="25">25 MB</option><option value="0">No limit</option></select></div>
+          <div class="field"><label class="lab" for="theme">Appearance</label><select id="theme"><option value="system">Match the phone</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+        </div>
+      </div>
+      <div class="group">
+        <h3>Performance</h3>
+        <div class="card">
+          <div class="field"><label class="lab" for="tile">Piece size</label><select id="tile">
+            <option value="256">Small pieces (older phones)</option><option value="384">Medium</option><option value="512">Large pieces (faster)</option></select></div>
+          <label class="toggle"><span>Largest AI model<small>Slightly better detail with "AI best", about 3× slower.</small></span><input type="checkbox" id="bigModel"></label>
+          <label class="toggle"><span>Use WebGPU<small>Faster on newer phones and computers. Turn off if results look wrong.</small></span><input type="checkbox" id="webgpu"></label>
+          <label class="toggle"><span>Keep the screen on while working<small>Stops the phone from sleeping in the middle of a job.</small></span><input type="checkbox" id="wake" checked></label>
+        </div>
+      </div>
+      <div class="group">
+        <h3>Offline and storage</h3>
+        <div class="card">
+          <p class="status" id="storeStatus">AI models download the first time you use them.</p>
+          <div class="actions">
+            <button class="btn" id="prefetch">Download AI models now</button>
+            <button class="btn ghost" id="clearCache">Clear saved data</button>
+          </div>
+          <div id="confirmClear" hidden class="card" style="background:var(--sheet)">
+            <p style="margin:0">This removes the downloaded AI models and the offline copy of the app. The app reloads afterwards.</p>
+            <div class="actions"><button class="btn primary" id="clearYes">Clear and reload</button><button class="btn ghost" id="clearNo">Keep</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="group">
+        <h3>About</h3>
+        <div class="card">
+          <p style="margin:0">Enlarger works entirely on this device. Photos are never uploaded, and there are no watermarks, credits or size limits.</p>
+          <p class="status" id="engineInfo">AI engine: not loaded yet.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="encoders.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
